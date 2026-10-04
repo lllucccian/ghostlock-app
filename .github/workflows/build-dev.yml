@@ -1,0 +1,88 @@
+name: Build Dev (vivo-test)
+
+on:
+  push:
+    branches:
+      - vr-ko-bypass-dev
+    paths-ignore:
+      - "**.md"
+  workflow_dispatch:
+
+concurrency:
+  group: "build-dev-${{ github.ref }}"
+  cancel-in-progress: true
+
+env:
+  ONDK_VERSION: "r30.1"
+
+jobs:
+  build-apk:
+    name: Build Debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: 21
+          distribution: zulu
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            build/extract
+          key: cargo-${{ runner.os }}-${{ hashFiles('tools/extract_rs/Cargo.lock') }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Cache ONDK
+        id: ondk-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ondk
+          key: ondk-${{ env.ONDK_VERSION }}-linux
+
+      - name: Download ONDK
+        if: steps.ondk-cache.outputs.cache-hit != 'true'
+        run: |
+          url="https://github.com/topjohnwu/ondk/releases/download/${ONDK_VERSION}/ondk-${ONDK_VERSION}-linux.tar.xz"
+          mkdir -p "${{ runner.temp }}/ondk"
+          curl -fL "$url" -o "${{ runner.temp }}/ondk.tar.xz"
+          tar -C "${{ runner.temp }}/ondk" --strip-components=1 -xf "${{ runner.temp }}/ondk.tar.xz"
+
+      - name: Link ONDK Rust toolchain
+        run: rustup toolchain link ondk "${{ runner.temp }}/ondk/toolchains/rust"
+
+      - name: Build Ghostlock binary
+        run: |
+          export ANDROID_NDK_HOME="${{ runner.temp }}/ondk"
+          export NDK_ROOT="$ANDROID_NDK_HOME"
+          make -C src ghostlock
+          "${{ runner.temp }}/ondk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip" --strip-all build/native/ghostlock || true
+
+      - name: Build Debug APK
+        run: |
+          export ONDK_HOME="${{ runner.temp }}/ondk"
+          export ANDROID_NDK_HOME="$ONDK_HOME"
+          export NDK_ROOT="$ONDK_HOME"
+          ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Rename Debug APK
+        run: mv build/app/outputs/apk/debug/*.apk GhostLock-debug.apk
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: GhostLock-debug
+          path: GhostLock-debug.apk
