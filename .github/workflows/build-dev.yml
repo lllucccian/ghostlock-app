@@ -96,6 +96,7 @@ jobs:
           BIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
           CLANG="$BIN/aarch64-linux-android35-clang"
           CC_aarch64_linux_android="$CLANG" \
+          AR_aarch64_linux_android="$BIN/llvm-ar" \
           CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CLANG" \
             cargo build --release \
               --target aarch64-linux-android \
