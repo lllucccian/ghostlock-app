@@ -93,8 +93,10 @@ jobs:
       - name: Build extract tool for arm64-android
         run: |
           NDK="${{ runner.temp }}/ondk"
-          LINKER="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang"
-          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$LINKER" \
+          BIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          CLANG="$BIN/aarch64-linux-android35-clang"
+          CC_aarch64_linux_android="$CLANG" \
+          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CLANG" \
             cargo build --release \
               --target aarch64-linux-android \
               --manifest-path tools/extract_rs/Cargo.toml
