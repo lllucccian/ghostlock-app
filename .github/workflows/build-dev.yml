@@ -86,3 +86,22 @@ jobs:
         with:
           name: GhostLock-debug
           path: GhostLock-debug.apk
+
+      - name: Add Android target for extract tool
+        run: rustup target add aarch64-linux-android
+
+      - name: Build extract tool for arm64-android
+        run: |
+          NDK="${{ runner.temp }}/ondk"
+          LINKER="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang"
+          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$LINKER" \
+            cargo build --release \
+              --target aarch64-linux-android \
+              --manifest-path tools/extract_rs/Cargo.toml
+          cp tools/extract_rs/../../build/extract/aarch64-linux-android/release/ghostlock-extract ghostlock-extract-arm64
+
+      - name: Upload extract tool
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghostlock-extract-arm64
+          path: ghostlock-extract-arm64
