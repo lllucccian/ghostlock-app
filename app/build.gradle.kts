@@ -69,7 +69,7 @@ android {
         }
     }
     defaultConfig {
-        applicationId = "com.ghostlock.app"
+        applicationId = "com.ghostlock.app.pselect"
         minSdk = 34
         targetSdk = 37
         versionCode = gitVersionCode
