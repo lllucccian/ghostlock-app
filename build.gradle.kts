@@ -95,12 +95,9 @@ tasks.register<Exec>("buildGhostlockNative") {
     outputs.file(file("ghostlock"))
 }
 
-tasks.register<Copy>("prepareGhostlockJniLibs") {
-    description = "prepareGhostlockJniLibs"
-    dependsOn("buildGhostlockNative")
-    from("ghostlock")
-    into("app/src/main/jniLibs/arm64-v8a")
-    rename { "libghostlock.so" }
+tasks.register("prepareGhostlockJniLibs") {
+    // Using prebuilt libghostlock.so committed to jniLibs - no native build needed
+    description = "prepareGhostlockJniLibs (prebuilt)"
 }
 
 tasks.register<Exec>("buildGhostlockExtract") {
@@ -130,10 +127,7 @@ tasks.register<Exec>("buildGhostlockExtract") {
     outputs.file(file("tools/extract_rs/target/aarch64-linux-android/release/ghostlock-extract"))
 }
 
-tasks.register<Copy>("prepareGhostlockExtractJniLibs") {
-    description = "prepareGhostlockExtractJniLibs"
-    dependsOn("buildGhostlockExtract")
-    from("tools/extract_rs/target/aarch64-linux-android/release/ghostlock-extract")
-    into("app/src/main/jniLibs/arm64-v8a")
-    rename { "libextract.so" }
+tasks.register("prepareGhostlockExtractJniLibs") {
+    // Using prebuilt libextract.so committed to jniLibs - no native build needed
+    description = "prepareGhostlockExtractJniLibs (prebuilt)"
 }
