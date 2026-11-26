@@ -63,7 +63,6 @@ import com.ghostlock.app.BuildConfig
 import com.ghostlock.app.BuildInfo
 import com.ghostlock.app.R
 import com.ghostlock.app.domain.model.ExecutionFieldValue
-import com.ghostlock.app.domain.model.ShizukuStatus
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
@@ -98,16 +97,13 @@ data class GhostlockUiState(
     val kernelRelease: String = "",
     val socName: String = "",
     val kernelSupported: Boolean = false,
-    val requiresShizuku: Boolean = false,
-    val shizukuEnabled: Boolean = false,
-    val shizukuStatus: ShizukuStatus = ShizukuStatus.NOT_REQUIRED,
     val running: Boolean = false,
     val advancedVisible: Boolean = false,
     val exportVisible: Boolean = false,
     val cpuPairLabels: List<String> = emptyList(),
     val cpuPairIndex: Int = 0,
     val safeModeEnabled: Boolean = false,
-    val tcpRouteEnabled: Boolean = true,
+    val tcpRouteEnabled: Boolean = false,
     val compact: Boolean = false,
     val executionSheetVisible: Boolean = false,
     val executionSheetDismissible: Boolean = false,
@@ -149,7 +145,7 @@ interface GhostlockActions {
     fun onExportOffsets()
     fun onCpuPairSelected(index: Int)
     fun onSafeModeChanged(enabled: Boolean)
-    fun onShizukuChanged(enabled: Boolean)
+    fun onTcpRouteChanged(enabled: Boolean)
     fun onDialogItemSelected(index: Int)
     fun onDialogInputChange(value: String)
     fun onDialogConfirm(value: String)
@@ -498,9 +494,7 @@ private fun PortraitContent(
         item(key = "run") {
             RunButton(
                 running = state.running,
-                supported = state.kernelSupported &&
-                    (!(state.requiresShizuku || state.shizukuEnabled) ||
-                        state.shizukuStatus == ShizukuStatus.READY),
+                supported = state.kernelSupported,
                 labelRes = R.string.action_run,
                 onClick = actions::onRun,
                 modifier = Modifier.fillMaxWidth(),
@@ -540,9 +534,7 @@ private fun LandscapeContent(
             item(key = "run") {
                 RunButton(
                     running = state.running,
-                    supported = state.kernelSupported &&
-                        (!(state.requiresShizuku || state.shizukuEnabled) ||
-                            state.shizukuStatus == ShizukuStatus.READY),
+                    supported = state.kernelSupported,
                     labelRes = R.string.action_run,
                     onClick = actions::onRun,
                     modifier = Modifier.fillMaxWidth(),
@@ -561,8 +553,6 @@ private fun ControlPanel(
     Column(modifier = modifier) {
         ActivationStatusCard(
             supported = state.kernelSupported,
-            requiresShizuku = state.requiresShizuku || state.shizukuEnabled,
-            shizukuStatus = state.shizukuStatus,
             onClick = actions::onStatusClick,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -593,23 +583,12 @@ private fun ControlPanel(
                 summary = stringResource(R.string.safe_mode_summary),
             )
         }
-        /* PROFILE-SUGGEST-01: the profile suggestion seeds the toggle but no
-         * longer hides it; an explicit user choice overrides either way. */
         Card(modifier = modifier.padding(top = 12.dp)) {
             SwitchPreference(
-                checked = state.shizukuEnabled,
-                onCheckedChange = actions::onShizukuChanged,
-                title = stringResource(R.string.shizuku_label),
-                summary = stringResource(
-                    when {
-                        !state.shizukuEnabled -> R.string.shizuku_summary_off
-                        state.shizukuStatus == ShizukuStatus.READY ->
-                            R.string.shizuku_summary_on
-                        state.shizukuStatus == ShizukuStatus.PERMISSION_REQUIRED ->
-                            R.string.shizuku_status_permission_required
-                        else -> R.string.shizuku_status_not_running
-                    }
-                ),
+                checked = state.tcpRouteEnabled,
+                onCheckedChange = actions::onTcpRouteChanged,
+                title = stringResource(R.string.tcp_route_label),
+                summary = stringResource(R.string.tcp_route_summary),
             )
         }
         AnimatedVisibility(
@@ -628,13 +607,10 @@ private fun ControlPanel(
 @Composable
 private fun ActivationStatusCard(
     supported: Boolean,
-    requiresShizuku: Boolean,
-    shizukuStatus: ShizukuStatus,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val accessReady = !requiresShizuku || shizukuStatus == ShizukuStatus.READY
-    val active = supported && accessReady
+    val active = supported
     val cardColor = if (isSystemInDarkTheme()) {
         if (active) Color(0xFF173923) else Color(0xFF3B2715)
     } else {
@@ -651,7 +627,7 @@ private fun ActivationStatusCard(
         if (isSystemInDarkTheme()) Color(0xFFFFC56C) else Color(0xFFF5A623)
     }
     Card(
-        modifier = modifier.clickable(enabled = supported && requiresShizuku && !accessReady) { onClick() },
+        modifier = modifier.clickable(enabled = false) { onClick() },
         colors = CardDefaults.defaultColors(color = cardColor),
     ) {
         Box(
@@ -663,10 +639,7 @@ private fun ActivationStatusCard(
                 text = stringResource(
                     when {
                         !supported -> R.string.kernel_unsupported
-                        !requiresShizuku -> R.string.kernel_supported
-                        shizukuStatus == ShizukuStatus.READY -> R.string.shizuku_ready
-                        shizukuStatus == ShizukuStatus.PERMISSION_REQUIRED -> R.string.shizuku_permission_required
-                        else -> R.string.shizuku_not_running
+                        else -> R.string.kernel_supported
                     },
                 ),
                 modifier = Modifier

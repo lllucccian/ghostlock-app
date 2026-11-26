@@ -13,14 +13,8 @@ data class KernelSnapshot(
     val cpuPairLabels: List<String>,
     val selectedCpuPair: Int,
     val safeModeEnabled: Boolean,
-    /** Profile/imported offsets force the Shizuku path. */
-    val requiresShizuku: Boolean,
-    /** User-selected Shizuku path for kernels that do not require it. */
-    val shizukuEnabled: Boolean = false,
-    val shizukuStatus: ShizukuStatus,
+    val tcpRouteEnabled: Boolean,
 )
-
-enum class ShizukuStatus { NOT_REQUIRED, NOT_RUNNING, PERMISSION_REQUIRED, READY }
 
 enum class LogTone { Default, Error, Success, Warning, Progress }
 

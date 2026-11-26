@@ -21,7 +21,6 @@ import com.ghostlock.app.domain.model.ParseResult
 import com.ghostlock.app.domain.model.SupportedKernels
 import com.ghostlock.app.domain.repository.GhostlockRepository
 import com.ghostlock.app.domain.usecase.OffsetMatching
-import com.ghostlock.app.shizuku.ShizukuExploitRunner
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
@@ -55,27 +54,16 @@ class AndroidGhostlockRepository(context: Context) : GhostlockRepository {
     private val cpuPairLabels = mutableListOf<String>()
     private var selectedCpuPair = 0
     private var safeModeEnabled = false
-    private var shizukuEnabled = false
-    /** True once the user flipped the toggle; only then does it override the
-     * profile suggestion (PROFILE-SUGGEST-01). */
-    private var shizukuPreferenceSet = false
+    private var tcpRouteEnabled = false
     private var pendingParsedEntries: JSONArray? = null
-    private val shizukuRunner = ShizukuExploitRunner(appContext)
 
     init {
         buildCpuPairs()
         restoreCpuPair()
-        restoreShizukuPreference()
     }
 
     override suspend fun snapshot(): KernelSnapshot {
         val release = System.getProperty("os.version", "unknown").orEmpty()
-        /* PROFILE-SUGGEST-01: requires_shizuku is a suggestion. It seeds the
-         * toggle until the user makes an explicit choice, which then overrides
-         * it in both directions. */
-        val requiresShizuku = release in SupportedKernels.REQUIRES_SHIZUKU ||
-            importedOffsetsRequireShizuku(release)
-        val shizukuActive = if (shizukuPreferenceSet) shizukuEnabled else requiresShizuku
         return KernelSnapshot(
             deviceName = resolveDeviceName(),
             kernelRelease = release,
@@ -85,10 +73,7 @@ class AndroidGhostlockRepository(context: Context) : GhostlockRepository {
             cpuPairLabels = cpuPairLabels.toList(),
             selectedCpuPair = selectedCpuPair,
             safeModeEnabled = safeModeEnabled,
-            requiresShizuku = requiresShizuku,
-            shizukuEnabled = shizukuActive,
-            shizukuStatus = if (shizukuActive) shizukuRunner.status()
-            else com.ghostlock.app.domain.model.ShizukuStatus.NOT_REQUIRED,
+            tcpRouteEnabled = tcpRouteEnabled,
         )
     }
 
@@ -104,15 +89,8 @@ class AndroidGhostlockRepository(context: Context) : GhostlockRepository {
         safeModeEnabled = enabled
     }
 
-    override fun setShizukuEnabled(enabled: Boolean) {
-        shizukuEnabled = enabled
-        shizukuPreferenceSet = true
-        appContext.getSharedPreferences("ghostlock_prefs", Context.MODE_PRIVATE)
-            .edit {
-                putBoolean("shizuku_enabled", enabled)
-                putBoolean("shizuku_explicit", true)
-            }
-        if (enabled) shizukuRunner.requestPermission()
+    override fun setTcpRouteEnabled(enabled: Boolean) {
+        tcpRouteEnabled = enabled
     }
 
     /* profile-ui: sparse per-release execution overrides live in the same
@@ -373,15 +351,6 @@ class AndroidGhostlockRepository(context: Context) : GhostlockRepository {
             runExploitBinary(pair, "libghostlock.so", archivedLog)
         }
 
-    override suspend fun runExploitWithShizuku(pair: CpuPair, onLog: (String) -> Unit): Int {
-        return withDebugAttackLog("shizuku", onLog) { archivedLog ->
-            val profileJson = ProfileConfiguration.resolve(
-                appContext, offsetsFile, System.getProperty("os.version", "").orEmpty(), pair,
-            )
-            shizukuRunner.run(pair, safeModeEnabled, profileJson, archivedLog)
-        }
-    }
-
     private suspend fun withDebugAttackLog(
         entry: String,
         onLog: (String) -> Unit,
@@ -404,11 +373,6 @@ class AndroidGhostlockRepository(context: Context) : GhostlockRepository {
             runCatching { archive.close() }
         }
     }
-
-    override fun requestShizukuPermission() = shizukuRunner.requestPermission()
-
-    override fun setShizukuStatusListener(listener: (() -> Unit)?) =
-        shizukuRunner.setStatusListener(listener)
 
     private suspend fun runExploitBinary(
         pair: CpuPair,
@@ -516,7 +480,6 @@ class AndroidGhostlockRepository(context: Context) : GhostlockRepository {
     }
 
     override fun close() {
-        shizukuRunner.close()
         synchronized(processes) {
             processes.forEach(Process::destroyForcibly)
             processes.clear()
@@ -610,15 +573,6 @@ class AndroidGhostlockRepository(context: Context) : GhostlockRepository {
         return (0 until entries.length()).any { entries.optJSONObject(it)?.optString("release") == version }
     }
 
-    private fun importedOffsetsRequireShizuku(version: String): Boolean {
-        val entries = readOffsetsFile(offsetsFile) ?: return false
-        return (0 until entries.length()).any { index ->
-            entries.optJSONObject(index)?.let { entry ->
-                entry.optString("release") == version && entry.optInt("requires_shizuku") == 1
-            } == true
-        }
-    }
-
     private fun buildCpuPairs() {
         cpuPairs.clear()
         cpuPairLabels.clear()
@@ -640,12 +594,6 @@ class AndroidGhostlockRepository(context: Context) : GhostlockRepository {
         val saved = appContext.getSharedPreferences("ghostlock_prefs", Context.MODE_PRIVATE).getString("cpu_pair", null) ?: return
         val pair = saved.split(',').mapNotNull { it.trim().toIntOrNull() }
         if (pair.size == 2) cpuPairs.indexOf(CpuPair(pair[0], pair[1])).takeIf { it >= 0 }?.let { selectedCpuPair = it }
-    }
-
-    private fun restoreShizukuPreference() {
-        val prefs = appContext.getSharedPreferences("ghostlock_prefs", Context.MODE_PRIVATE)
-        shizukuPreferenceSet = prefs.getBoolean("shizuku_explicit", false)
-        shizukuEnabled = prefs.getBoolean("shizuku_enabled", false)
     }
 
     private fun parseCpuList(value: String): List<Int> = value.split(',').flatMap { part ->

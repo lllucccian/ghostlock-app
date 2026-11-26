@@ -14,7 +14,7 @@ interface GhostlockRepository {
 
     fun setSafeModeEnabled(enabled: Boolean)
 
-    fun setShizukuEnabled(enabled: Boolean)
+    fun setTcpRouteEnabled(enabled: Boolean)
 
     suspend fun exportCandidates(): List<OffsetCandidate>
 
@@ -42,12 +42,6 @@ interface GhostlockRepository {
     suspend fun clearExecutionOverrides(release: String): Boolean
 
     suspend fun runExploit(pair: CpuPair, onLog: (String) -> Unit): Int
-
-    suspend fun runExploitWithShizuku(pair: CpuPair, onLog: (String) -> Unit): Int
-
-    fun requestShizukuPermission()
-
-    fun setShizukuStatusListener(listener: (() -> Unit)?)
 
     fun close()
 }

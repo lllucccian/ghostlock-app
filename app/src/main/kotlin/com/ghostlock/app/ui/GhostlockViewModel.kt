@@ -8,7 +8,6 @@ import com.ghostlock.app.domain.model.LogTone
 import com.ghostlock.app.domain.model.OffsetCandidate
 import com.ghostlock.app.domain.model.OffsetImportResult
 import com.ghostlock.app.domain.model.ParseResult
-import com.ghostlock.app.domain.model.ShizukuStatus
 import com.ghostlock.app.domain.repository.GhostlockRepository
 import com.ghostlock.app.domain.usecase.ExportOffsetsUseCase
 import com.ghostlock.app.domain.usecase.FormatLogUseCase
@@ -35,7 +34,6 @@ sealed interface GhostlockEffect {
     data class Toast(val resourceId: Int) : GhostlockEffect
     data class Clipboard(val text: String) : GhostlockEffect
     data class KeepScreenAwake(val enabled: Boolean) : GhostlockEffect
-    data object OpenShizuku : GhostlockEffect
 }
 
 enum class DocumentRequest { ImportOffsets, BootImage, XblImage }
@@ -69,12 +67,7 @@ class GhostlockViewModel(
     fun initialize() {
         if (initialized) return
         initialized = true
-        repository.setShizukuStatusListener { refreshAccessStatus() }
         viewModelScope.launch { refreshSnapshot() }
-    }
-
-    fun refreshAccessStatus() {
-        if (initialized) viewModelScope.launch { refreshSnapshot() }
     }
 
     fun toggleAdvanced() {
@@ -165,29 +158,14 @@ class GhostlockViewModel(
         mutableState.update { it.copy(safeModeEnabled = enabled) }
     }
 
-    fun toggleShizuku(enabled: Boolean) {
-        repository.setShizukuEnabled(enabled)
-        mutableState.update { it.copy(shizukuEnabled = enabled) }
-        // The grant dialog lands in another app, so the status is re-read and
-        // onResume() refreshes it again when the dialog closes.
-        viewModelScope.launch { refreshSnapshot() }
+    fun toggleTcpRoute(enabled: Boolean) {
+        repository.setTcpRouteEnabled(enabled)
+        mutableState.update { it.copy(tcpRouteEnabled = enabled) }
     }
 
     fun onRun() = runExploit()
 
-    fun onStatusClick() {
-        val snapshot = kernelSnapshot ?: return
-        /* shizukuEnabled already carries the profile suggestion unless the
-         * user overrode it (PROFILE-SUGGEST-01). */
-        if (!snapshot.shizukuEnabled) return
-        when (snapshot.shizukuStatus) {
-            ShizukuStatus.NOT_RUNNING -> send(GhostlockEffect.OpenShizuku)
-            ShizukuStatus.PERMISSION_REQUIRED -> repository.requestShizukuPermission()
-            ShizukuStatus.NOT_REQUIRED,
-            ShizukuStatus.READY,
-            -> Unit
-        }
-    }
+    fun onStatusClick() {}
 
     private fun runExploit() {
         val snapshot = kernelSnapshot ?: return
@@ -198,19 +176,14 @@ class GhostlockViewModel(
             }
             return
         }
-        val useShizuku = snapshot.shizukuEnabled
-        if (useShizuku && snapshot.shizukuStatus != ShizukuStatus.READY) {
-            onStatusClick()
-            return
-        }
         val pair = snapshot.cpuPairs.getOrNull(snapshot.selectedCpuPair) ?: return
         if (!beginOperation()) return
         send(GhostlockEffect.KeepScreenAwake(true))
-        appendLog("==== start ${if (useShizuku) "Shizuku/V20" else "base"} ====")
+        appendLog("==== start base ====")
         appendLog("cpu pair: ${snapshot.cpuPairLabels.getOrElse(snapshot.selectedCpuPair) { pair.toString() }}")
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val code = runExploitUseCase(pair, useShizuku, ::appendLog)
+                val code = runExploitUseCase(pair, ::appendLog)
                 appendLog(if (code == 0) "result: exploit completed" else "result: exploit failed (exit code=$code)")
                 appendLog("exit code=$code")
             } finally {
@@ -340,9 +313,7 @@ class GhostlockViewModel(
                 cpuPairLabels = snapshot.cpuPairLabels,
                 cpuPairIndex = snapshot.selectedCpuPair,
                 safeModeEnabled = snapshot.safeModeEnabled,
-                requiresShizuku = snapshot.requiresShizuku,
-                shizukuEnabled = snapshot.shizukuEnabled,
-                shizukuStatus = snapshot.shizukuStatus,
+                tcpRouteEnabled = snapshot.tcpRouteEnabled,
                 exportVisible = canExport,
             )
         }
