@@ -45,11 +45,6 @@ class MainActivity : ComponentActivity() {
         setupSystemBars()
     }
 
-    override fun onResume() {
-        super.onResume()
-        viewModel.refreshAccessStatus()
-    }
-
     private fun handleEffect(effect: GhostlockEffect) {
         when (effect) {
             is GhostlockEffect.PickDocument -> {
