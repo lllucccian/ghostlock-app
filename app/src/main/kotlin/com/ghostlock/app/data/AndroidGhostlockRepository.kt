@@ -54,7 +54,7 @@ class AndroidGhostlockRepository(context: Context) : GhostlockRepository {
     private val cpuPairLabels = mutableListOf<String>()
     private var selectedCpuPair = 0
     private var safeModeEnabled = false
-    private var tcpRouteEnabled = false
+    private var tcpRouteEnabled = true
     private var pendingParsedEntries: JSONArray? = null
 
     init {
