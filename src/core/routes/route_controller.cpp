@@ -16,7 +16,7 @@ void route_controller_init(RouteController *controller,
             .race = race,
             .profile = profile,
             .selected = selected,
-            .allow_tcp_select_fallback = 1,
+            .allow_tcp_select_fallback = 0,
             .fallback_used = 0,
     };
 }
